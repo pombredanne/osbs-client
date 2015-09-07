@@ -9,11 +9,13 @@ from flexmock import flexmock
 import os
 import pytest
 import datetime
+import sys
+from time import tzset
 
 from osbs.utils import (deep_update,
                         get_imagestreamtag_from_image,
                         git_repo_humanish_part_from_uri,
-                        get_time_from_rfc3399)
+                        get_time_from_rfc3339)
 from osbs.exceptions import OsbsException
 import osbs.kerberos_ccache
 
@@ -48,23 +50,40 @@ def test_get_imagestreamtag_from_image(img, expected):
     assert get_imagestreamtag_from_image(img) == expected
 
 
-@pytest.mark.parametrize(('rfc3399', 'seconds'), [
+@pytest.mark.parametrize('tz', [
+    'UTC',
+    'EST',
+])
+@pytest.mark.parametrize(('rfc3339', 'seconds'), [
     ('2015-08-24T10:41:00Z', 1440412860.0),
 ])
-def test_get_time_from_rfc3399_valid(rfc3399, seconds):
-    assert get_time_from_rfc3399(rfc3399) == seconds
+def test_get_time_from_rfc3339_valid(rfc3339, seconds, tz):
+    os.environ['TZ'] = tz
+    tzset()
+    assert get_time_from_rfc3339(rfc3339) == seconds
 
-
-@pytest.mark.parametrize('rfc3399', [
-    ('just completely invalid'),
-
-    # The implementation doesn't know enough about RFC 3399 to
-    # distinguish between invalid and unsupported
-    ('2015-08-24T10:41:00.1Z'),
+@pytest.mark.skipif(sys.version_info[0] < 3,
+                    reason="requires python3")
+@pytest.mark.parametrize('tz', [
+    'UTC',
+    'EST',
 ])
-def test_get_time_from_rfc3399_invalid(rfc3399):
-    with pytest.raises(RuntimeError):
-        get_time_from_rfc3399(rfc3399)
+@pytest.mark.parametrize(('rfc3339', 'seconds'), [
+    # This test only works in Python 3
+    ('2015-08-24T10:41:00.1Z', 1440412860.1),
+])
+def test_get_time_from_rfc3339_valid_alt_format(rfc3339, seconds, tz):
+    os.environ['TZ'] = tz
+    tzset()
+    assert get_time_from_rfc3339(rfc3339) == seconds
+
+
+@pytest.mark.parametrize('rfc3339', [
+    ('just completely invalid'),
+])
+def test_get_time_from_rfc3339_invalid(rfc3339):
+    with pytest.raises(ValueError):
+        get_time_from_rfc3339(rfc3339)
 
 
 KLIST_TEMPLATE = """
